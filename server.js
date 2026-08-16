@@ -10,12 +10,9 @@ app.get("/", (req, res) => {
     message: "BarberFlow API funcionando!",
   });
 });
-
+//insert de cliente
 app.post("/clientes", async (req, res) => {
   try {
-    console.log("BODY RECEBIDO:");
-    console.log(req.body);
-
     const cliente = await prisma.cliente.create({
       data: {
         nome: req.body.nome,
@@ -23,19 +20,41 @@ app.post("/clientes", async (req, res) => {
         telefone: req.body.telefone,
         senha: req.body.senha,
       },
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        telefone: true,
+        createdAt: true,
+      },
     });
 
     res.json(cliente);
   } catch (error) {
+    if (error.code === "P2002") {
+      return res.status(400).json({
+        erro: "Este e-mail já está cadastrado no BarberFlow",
+      });
+    }
+
     res.status(500).json({
       erro: error.message,
     });
   }
 });
 
+//buscar cliente
 app.get("/clientes", async (req, res) => {
   try {
-    const clientes = await prisma.cliente.findMany();
+    const clientes = await prisma.cliente.findMany({
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        telefone: true,
+        createdAt: true,
+      },
+    });
 
     res.json(clientes);
   } catch (error) {
