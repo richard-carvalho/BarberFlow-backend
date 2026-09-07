@@ -1,9 +1,11 @@
 import express from "express";
 import prisma from "./prismaClient.js";
+import cors from "cors";
 
 const app = express();
 
 app.use(express.json());
+app.use(cors());
 
 app.get("/", (req, res) => {
   res.json({
@@ -13,17 +15,8 @@ app.get("/", (req, res) => {
 //insert de cliente
 app.post("/clientes", async (req, res) => {
   try {
-    // 1) Recebe os dados
-    const { nome, email, telefone, senha, confirmar_senha } = req.body;
+    const { nome, email, telefone, senha } = req.body;
 
-    // 2) Confere se as senhas são iguais
-    if (senha !== confirmar_senha) {
-      return res.status(400).json({
-        erro: "As senhas não conferem",
-      });
-    }
-
-    // 3) Só depois grava no banco
     const cliente = await prisma.cliente.create({
       data: {
         nome: nome,
@@ -40,7 +33,6 @@ app.post("/clientes", async (req, res) => {
       },
     });
 
-    // 4) Retorna o cliente criado
     res.json(cliente);
   } catch (error) {
     if (error.code === "P2002") {
@@ -70,6 +62,53 @@ app.get("/clientes", async (req, res) => {
 
     res.json(clientes);
   } catch (error) {
+    res.status(500).json({
+      erro: error.message,
+    });
+  }
+});
+
+// login do cliente
+app.post("/login", async (req, res) => {
+  try {
+    const { email, senha } = req.body;
+
+    console.log("LOGIN RECEBIDO:");
+    console.log("Email:", email);
+    console.log("Senha recebida:", senha);
+
+    const cliente = await prisma.cliente.findUnique({
+      where: {
+        email: email,
+      },
+    });
+
+    console.log("CLIENTE ENCONTRADO:", cliente);
+
+    if (!cliente) {
+      return res.status(401).json({
+        erro: "E-mail ou senha incorretos.",
+      });
+    }
+
+    console.log("Senha no banco:", cliente.senha);
+    console.log("Senha confere:", cliente.senha === senha);
+
+    if (cliente.senha !== senha) {
+      return res.status(401).json({
+        erro: "E-mail ou senha incorretos.",
+      });
+    }
+
+    res.json({
+      id: cliente.id,
+      nome: cliente.nome,
+      email: cliente.email,
+      telefone: cliente.telefone,
+    });
+  } catch (error) {
+    console.error("ERRO NO LOGIN:", error);
+
     res.status(500).json({
       erro: error.message,
     });
