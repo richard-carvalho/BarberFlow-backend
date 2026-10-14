@@ -29,3 +29,13 @@ model Servico {
   duracao   Int
   createdAt DateTime @default(now())
 }
+
+model Profissional {
+  id           Int      @id @default(autoincrement())
+  nome         String
+  especialidade String
+  descricao    String?
+  foto         String?
+  ativo        Boolean  @default(true)
+  createdAt    DateTime @default(now())
+}

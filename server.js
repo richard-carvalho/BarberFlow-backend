@@ -148,6 +148,75 @@ app.get("/servicos", async (req, res) => {
   }
 });
 
+/* =====================================
+   CADASTRO DE PROFISSIONAIS
+===================================== */
+
+// Cadastrar profissional
+app.post("/profissionais", async (req, res) => {
+  try {
+    const { nome, especialidade, descricao, foto } = req.body;
+
+    if (!nome?.trim() || !especialidade?.trim()) {
+      return res.status(400).json({
+        erro: "Nome e especialidade são obrigatórios.",
+      });
+    }
+
+    const profissional = await prisma.profissional.create({
+      data: {
+        nome: nome.trim(),
+        especialidade: especialidade.trim(),
+        descricao: descricao?.trim() || null,
+        foto: foto?.trim() || null,
+      },
+    });
+
+    return res.status(201).json(profissional);
+  } catch (error) {
+    console.error("Erro ao cadastrar profissional:", error);
+
+    return res.status(500).json({
+      erro: "Não foi possível cadastrar o profissional.",
+    });
+  }
+});
+
+// Listar todos os profissionais
+app.get("/profissionais", async (req, res) => {
+  try {
+    const profissionais = await prisma.profissional.findMany({
+      orderBy: { nome: "asc" },
+    });
+
+    return res.json(profissionais);
+  } catch (error) {
+    console.error("Erro ao buscar profissionais:", error);
+
+    return res.status(500).json({
+      erro: "Não foi possível buscar os profissionais.",
+    });
+  }
+});
+
+// Listar somente profissionais ativos
+app.get("/profissionais/disponiveis", async (req, res) => {
+  try {
+    const profissionais = await prisma.profissional.findMany({
+      where: { ativo: true },
+      orderBy: { nome: "asc" },
+    });
+
+    return res.json(profissionais);
+  } catch (error) {
+    console.error("Erro ao buscar profissionais disponíveis:", error);
+
+    return res.status(500).json({
+      erro: "Não foi possível buscar os profissionais disponíveis.",
+    });
+  }
+});
+
 app.listen(3000, () => {
   console.log("Servidor rodando em http://localhost:3000");
 });
