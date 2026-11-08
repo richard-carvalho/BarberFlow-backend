@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
@@ -11,31 +9,53 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
-model Cliente { 
-  id        Int      @id @default(autoincrement()) 
-  nome      String 
-  email     String   @unique 
-  telefone  String 
-  senha     String 
 
-  createdAt DateTime @default(now()) 
+model Cliente {
+  id           Int           @id @default(autoincrement())
+  nome         String
+  email        String        @unique
+  telefone     String
+  senha        String
+  createdAt    DateTime      @default(now())
+  agendamentos Agendamento[]
 }
 
 model Servico {
-  id        Int      @id @default(autoincrement())
-  nome      String
-  descricao String?
-  preco     Decimal
-  duracao   Int
-  createdAt DateTime @default(now())
+  id           Int           @id @default(autoincrement())
+  nome         String
+  descricao    String?
+  preco        Decimal
+  duracao      Int
+  createdAt    DateTime      @default(now())
+  agendamentos Agendamento[]
 }
 
 model Profissional {
-  id           Int      @id @default(autoincrement())
-  nome         String
+  id            Int           @id @default(autoincrement())
+  nome          String
   especialidade String
-  descricao    String?
-  foto         String?
-  ativo        Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  descricao     String?
+  foto          String?
+  ativo         Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  agendamentos  Agendamento[]
+}
+
+model Agendamento {
+  id             Int          @id @default(autoincrement())
+  clienteId      Int
+  servicoId      Int
+  profissionalId Int
+  data           DateTime     @db.Date
+  hora           String
+  status         String       @default("CONFIRMADO")
+  createdAt      DateTime     @default(now())
+
+  cliente        Cliente      @relation(fields: [clienteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  servico        Servico      @relation(fields: [servicoId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  profissional  Profissional @relation(fields: [profissionalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([profissionalId, data, hora], name: "profissional_data_hora")
+  @@index([clienteId, data])
+  @@index([data])
 }
