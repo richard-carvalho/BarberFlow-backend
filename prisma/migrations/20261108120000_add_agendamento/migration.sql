@@ -41,3 +41,18 @@ ALTER TABLE "Agendamento"
 ADD CONSTRAINT "Agendamento_profissionalId_fkey"
 FOREIGN KEY ("profissionalId") REFERENCES "Profissional"("id")
 ON DELETE RESTRICT ON UPDATE CASCADE;
+
+
+ALTER TABLE "Agendamento"
+    ALTER COLUMN "createdAt" DROP DEFAULT;
+
+ALTER TABLE "Agendamento"
+    ALTER COLUMN "createdAt"
+        TYPE TIMESTAMPTZ(3)
+        USING "createdAt" AT TIME ZONE 'UTC',
+    ALTER COLUMN "canceladoEm"
+        TYPE TIMESTAMPTZ(3)
+        USING "canceladoEm" AT TIME ZONE 'UTC';
+
+ALTER TABLE "Agendamento"
+    ALTER COLUMN "createdAt" SET DEFAULT CURRENT_TIMESTAMP;

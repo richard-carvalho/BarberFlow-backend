@@ -52,6 +52,37 @@ function isMonday(date) {
   return date.getUTCDay() === 1;
 }
 
+// Converte a data e a hora da agenda (horário local de São Paulo) para um instante UTC.
+// A regra de cancelamento é calculada no servidor, independentemente do relógio do navegador.
+function dateTimeInSaoPaulo(date, time) {
+  const dateText = date.toISOString().slice(0, 10);
+  const [year, month, day] = dateText.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+  const localAsUtc = Date.UTC(year, month - 1, day, hour, minute, 0);
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(localAsUtc));
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const representedAsUtc = Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    Number(values.hour),
+    Number(values.minute),
+    Number(values.second),
+  );
+  const offset = representedAsUtc - localAsUtc;
+  return new Date(localAsUtc - offset);
+}
+
 app.get("/", (req, res) => {
   res.json({ message: "BarberFlow API funcionando!" });
 });
@@ -270,7 +301,7 @@ app.get("/horarios", async (req, res) => {
   }
 });
 
-// Criar agendamento. Não há rotas de exclusão ou alteração nesta etapa.
+// Criar agendamento. Cancelamentos preservam o registro e liberam o horário.
 app.post("/agendamentos", async (req, res) => {
   try {
     const clienteId = Number(req.body.clienteId);
@@ -350,7 +381,97 @@ app.post("/agendamentos", async (req, res) => {
   }
 });
 
-// Lista somente os agendamentos do cliente informado.
+// Cancela um agendamento sem apagar o histórico. O cliente só pode cancelar
+// um registro associado ao próprio clienteId e com pelo menos 1 hora de antecedência.
+app.post("/agendamentos/:id/cancelar", async (req, res) => {
+  try {
+    const agendamentoId = Number(req.params.id);
+    const clienteId = Number(req.body.clienteId);
+    const motivo = typeof req.body.motivo === "string" ? req.body.motivo.trim() : "";
+
+    if (!Number.isInteger(agendamentoId) || agendamentoId <= 0 ||
+        !Number.isInteger(clienteId) || clienteId <= 0) {
+      return res.status(400).json({ erro: "Identificação do agendamento ou cliente inválida." });
+    }
+
+    if (motivo.length < 3 || motivo.length > 300) {
+      return res.status(400).json({ erro: "Informe o motivo do cancelamento (até 300 caracteres)." });
+    }
+
+    const agendamento = await prisma.agendamento.findFirst({
+      where: { id: agendamentoId, clienteId },
+      include: {
+        servico: { select: { id: true, nome: true, preco: true, duracao: true } },
+        profissional: { select: { id: true, nome: true, especialidade: true, foto: true } },
+      },
+    });
+
+    if (!agendamento) {
+      return res.status(404).json({ erro: "Agendamento não encontrado para este cliente." });
+    }
+
+    if (agendamento.status !== "CONFIRMADO") {
+      return res.status(409).json({ erro: "Este agendamento já foi cancelado ou não está ativo." });
+    }
+
+    const inicioAgendamento = dateTimeInSaoPaulo(agendamento.data, agendamento.hora);
+    const minutosRestantes = inicioAgendamento.getTime() - Date.now();
+    const antecedenciaMinima = 60 * 60 * 1000;
+
+    if (minutosRestantes < antecedenciaMinima) {
+      return res.status(400).json({
+        erro: "Não é possível cancelar este agendamento. O cancelamento deve ser feito com pelo menos 1 hora de antecedência.",
+      });
+    }
+
+    // updateMany com o status no filtro evita que duas requisições simultâneas
+    // cancelem o mesmo registro ou alterem seu motivo depois da primeira confirmação.
+
+const agora = new Date();
+
+console.log("HORÁRIO UTC:", agora.toISOString());
+
+console.log(
+  "HORÁRIO SÃO PAULO:",
+  new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    dateStyle: "short",
+    timeStyle: "medium",
+  }).format(agora)
+);
+
+const resultado = await prisma.agendamento.updateMany({
+  where: {
+    id: agendamentoId,
+    clienteId,
+    status: "CONFIRMADO",
+  },
+  data: {
+    status: "CANCELADO",
+    motivoCancelamento: motivo,
+    canceladoEm: agora, // alteração aqui
+  },
+});
+    if (resultado.count === 0) {
+      return res.status(409).json({ erro: "Este agendamento já foi cancelado ou não está mais disponível para cancelamento." });
+    }
+
+    const agendamentoCancelado = await prisma.agendamento.findUnique({
+      where: { id: agendamentoId },
+      include: {
+        servico: { select: { id: true, nome: true, preco: true, duracao: true } },
+        profissional: { select: { id: true, nome: true, especialidade: true, foto: true } },
+      },
+    });
+
+    return res.json(agendamentoCancelado);
+  } catch (error) {
+    console.error("Erro ao cancelar agendamento:", error);
+    return res.status(500).json({ erro: "Não foi possível cancelar o agendamento." });
+  }
+});
+
+// Lista os agendamentos do cliente, incluindo os cancelados para manter o histórico.
 app.get("/agendamentos", async (req, res) => {
   try {
     const clienteId = Number(req.query.clienteId);
@@ -373,6 +494,7 @@ app.get("/agendamentos", async (req, res) => {
     return res.status(500).json({ erro: "Não foi possível listar os agendamentos." });
   }
 });
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
